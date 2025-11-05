@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>WeApRous Chat (Sample)</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+  <h1>WeApRous Chat (Sample)</h1>
+
+  <div id="setup">
+    <label>Your name: <input id="username" value="guest"></label>
+    <label>Your port: <input id="port" value="9001"></label>
+    <button id="btnRegister">Register with Tracker</button>
+  </div>
+
+  <div id="peers">
+    <h2>Peers</h2>
+    <ul id="peerList"></ul>
+    <button id="btnRefresh">Refresh peers</button>
+  </div>
+
+  <div id="chat">
+    <h2>Chat</h2>
+    <div id="messages" style="border:1px solid #ccc;height:200px;overflow:auto;padding:8px"></div>
+    <input id="messageInput" placeholder="Type a message..." style="width:80%">
+    <button id="btnSend">Send (broadcast)</button>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
+<!-- <!doctype html>
+<html>
+<head>
+    <title>bksysnet@hcmut welcome</title>
+
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="stylesheet" href="css/styles.css" />
+</head>
+
+<body>
+<div>
+    <h1>bksysnet@hcmut  Domain</h1>
+    <p>This domain is for use in illustrative examples in documents.
+    </p>
+  
+       <img src="images/welcome.png" alt="bksysnet at HCMUT" width="500" height="600">  
+</div>
+</body>
+</html> -->
