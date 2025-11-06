@@ -24,19 +24,20 @@
         </div>
 
         <div id="peers">
-            <h2>Active Peers</h2>
+            <h2>Select Peer</h2>
             <div class="peer-container">
-                <ul id="peerList"></ul>
-                <button id="btnRefresh">Refresh Peers</button>
+                <select id="peerSelect" class="peer-select" disabled>
+                    <option value="">Select a peer to chat with...</option>
+                </select>
             </div>
         </div>
 
         <div id="chat">
-            <h2>Messages</h2>
+            <h2>P2P Messages</h2>
             <div id="messages"></div>
             <div class="message-input">
-                <input id="messageInput" placeholder="Type your message here...">
-                <button id="btnSend">Send Message</button>
+                <input id="messageInput" placeholder="Type your message here..." disabled>
+                <button id="btnSend" disabled>Send Message</button>
             </div>
         </div>
     </div>

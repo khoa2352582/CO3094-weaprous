@@ -287,10 +287,13 @@ class Response():
         :rtype bytes: complete HTTP response using prepared headers and content.
         """
 
-        path = request.path
+        # Ensure we have a valid path; default to index if missing
+        path = request.path or '/'
+        if path == '/':
+            path = '/index.html'
 
         mime_type = self.get_mime_type(path)
-        print("[Response] {} path {} mime_type {}".format(request.method, request.path, mime_type))
+        print("[Response] {} path {} mime_type {}".format(request.method, path, mime_type))
 
         base_dir = ""
 

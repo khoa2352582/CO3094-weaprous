@@ -146,6 +146,18 @@ class HttpAdapter:
         method = (req.method or '').upper()
         path = req.path or ''
 
+        # Handle CORS preflight OPTIONS requests early
+        if method == 'OPTIONS':
+            r = Response()
+            r.status_code = 200
+            r.reason = 'OK'
+            r.headers['Access-Control-Allow-Origin'] = '*'
+            r.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+            r.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+            conn.sendall(r.build_response_header(req))
+            conn.close()
+            return
+
         # # Task 1B: protect index
         if path == '/' or path == '/index.html':
             auth = getattr(req, 'cookies', {}) or {}

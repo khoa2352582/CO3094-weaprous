@@ -70,62 +70,90 @@ def register(headers=None, body=None):
 
 @app.route('/get-peers', methods=['GET'])
 def get_peers(headers=None, body=None):
-    """Return a JSON list of currently known peers."""
+    """Return a list of currently active peers and their status.
+    Returns: {'status': 'ok', 'peers': [{ip, port, last_seen},...]}
+    """
     try:
-        # filter out stale peers (older than 5 minutes)
+        # Filter active peers (seen in last 5 minutes)
         now = time.time()
-        timeout = 300
-        alive = []
-        remove = []
-        for k, v in app.peers.items():
-            if now - v['last_seen'] <= timeout:
-                alive.append({'ip': v['ip'], 'port': v['port']})
+        timeout = 300  # 5 minutes
+        active_peers = {}
+        
+        for key, peer in list(app.peers.items()):
+            if now - peer['last_seen'] <= timeout:
+                active_peers[key] = {
+                    'ip': peer['ip'],
+                    'port': peer['port'],
+                    'last_seen': peer['last_seen']
+                }
             else:
-                remove.append(k)
-        for k in remove:
-            del app.peers[k]
-
-        return json.dumps({'peers': alive})
+                # Clean up stale peers
+                del app.peers[key]
+        
+        return json.dumps({
+            'status': 'ok',
+            'peers': active_peers
+        })
     except Exception as e:
+        print('[Tracker] get-peers error:', e)
         return json.dumps({'status': 'error', 'reason': str(e)})
 
 
 @app.route('/send-peer', methods=['POST'])
 def send_peer(headers=None, body=None):
-    """Receive a message sent directly from another peer.
-
-    Accepts either JSON body like {"from_ip":"...","from_port":9001,"message":"..."}
-    or form-encoded data with the same keys. Stores the message in `app.messages`
-    and returns {'status':'ok'} on success.
+    """Handle peer messages with the initial handshake protocol.
+    
+    First message: Sender includes their info, receiver responds with their info
+    Subsequent messages: Direct P2P communication
+    
+    Accepts JSON: {
+        "from_ip": "...",
+        "from_port": 9001,
+        "message": "...",
+        "is_first": true/false  # indicates if this is first contact
+    }
     """
     try:
         data = {}
-        # body can be a JSON string, a dict, or form-encoded string
         if isinstance(body, dict):
             data = body
         elif isinstance(body, str):
-            # try JSON first
             try:
                 data = json.loads(body)
             except Exception:
                 data = {k: v[0] for k, v in parse_qs(body).items()}
 
-        sender_ip = data.get('from_ip') or data.get('ip') or data.get('from')
+        sender_ip = data.get('from_ip') or data.get('ip')
         sender_port = data.get('from_port') or data.get('port')
-        message = data.get('message') or data.get('msg') or data.get('text')
+        message = data.get('message')
+        is_first = data.get('is_first', False)
 
-        if not message:
-            return json.dumps({'status': 'error', 'reason': 'missing message'})
+        if not sender_ip or not sender_port or not message:
+            return json.dumps({'status': 'error', 'reason': 'missing required fields'})
 
+        # Store the message
         entry = {
             'from_ip': sender_ip,
-            'from_port': int(sender_port) if sender_port else None,
+            'from_port': int(sender_port),
             'message': message,
             'received_at': time.time()
         }
         app.messages.append(entry)
-        print(f"[Peer] Received message from {sender_ip}:{sender_port} -> {message}")
+        
+        # If this is first contact, respond with our info for P2P
+        if is_first:
+            print(f"[Peer] First contact from {sender_ip}:{sender_port}")
+            return json.dumps({
+                'status': 'ok',
+                'request_info': True,  # indicates we want their info
+                'ip': app.ip,         # our IP for them to contact us
+                'port': app.port      # our port for them to contact us
+            })
+        
+        # Normal response for subsequent messages
+        print(f"[Peer] Message from {sender_ip}:{sender_port} -> {message}")
         return json.dumps({'status': 'ok'})
+        
     except Exception as e:
         print('[Peer] send-peer error:', e)
         return json.dumps({'status': 'error', 'reason': str(e)})
