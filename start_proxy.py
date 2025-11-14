@@ -1,3 +1,4 @@
+
 # reverse_proxy.py
 #
 # Copyright (C) 2025 pdnguyen of HCMC University of Technology VNU-HCM.
@@ -39,7 +40,7 @@ import socket
 import threading
 import argparse
 import re
-from urlparse import urlparse
+from urllib.parse import urlparse
 from collections import defaultdict
 
 from daemon import create_proxy
@@ -52,7 +53,7 @@ def parse_virtual_hosts(config_file):
     Parses virtual host blocks from a config file.
 
     :config_file (str): Path to the NGINX config file.
-    :rtype list of dict: Each dict contains 'listen'and 'server_name'.
+    :rtype dict: Each entry maps hostname to tuple of (backend(s), policy, headers).
     """
 
     with open(config_file, 'r') as f:
@@ -66,12 +67,18 @@ def parse_virtual_hosts(config_file):
     routes = {}
     for host, block in host_blocks:
         proxy_map = {}
+        headers_map = {}
 
         # Find all proxy_pass entries
         proxy_passes = re.findall(r'proxy_pass\s+http://([^\s;]+);', block)
         map = proxy_map.get(host,[])
         map = map + proxy_passes
         proxy_map[host] = map
+
+        # Find proxy_set_header directives
+        header_matches = re.findall(r'proxy_set_header\s+(\S+)\s+([^;]+);', block)
+        for header_name, header_value in header_matches:
+            headers_map[header_name] = header_value.strip()
 
         # Find dist_policy if present
         policy_match = re.search(r'dist_policy\s+(\w+)', block)
@@ -89,15 +96,15 @@ def parse_virtual_hosts(config_file):
         #       proxy_pass
         #
         if len(proxy_map.get(host,[])) == 1:
-            routes[host] = (proxy_map.get(host,[])[0], dist_policy_map)
+            routes[host] = (proxy_map.get(host,[])[0], dist_policy_map, headers_map)
         # esle if:
         #         TODO:  apply further policy matching here
         #
         else:
-            routes[host] = (proxy_map.get(host,[]), dist_policy_map)
+            routes[host] = (proxy_map.get(host,[]), dist_policy_map, headers_map)
 
     for key, value in routes.items():
-        print key, value
+        print(key, value)
     return routes
 
 

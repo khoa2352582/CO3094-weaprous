@@ -214,6 +214,8 @@ class HttpAdapter:
                 print('[HttpAdapter] hook error: {}'.format(e))
 
         # Default static handling
+        resp.status_code = 200
+        resp.reason = "OK"
         response = resp.build_response(req)
         conn.sendall(response)
         conn.close()
