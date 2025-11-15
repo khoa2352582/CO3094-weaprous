@@ -154,6 +154,8 @@ class HttpAdapter:
             r.headers['Access-Control-Allow-Origin'] = '*'
             r.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
             r.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+            r.headers['Content-Type'] = 'text/plain' # Gán một loại content-type
+            r._content = b''
             conn.sendall(r.build_response_header(req))
             conn.close()
             return

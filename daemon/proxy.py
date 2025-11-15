@@ -329,7 +329,7 @@ def run_proxy(ip, port, routes):
         proxy.bind((ip, port))
         proxy.listen(50)
 
-        print("--- KHOA-DEBUG: VERSION MOI NHAT DANG CHAY ---") # Dòng print của bạn
+      
 
         print("[Proxy] Listening on IP {} port {}".format(ip,port))
         while True:

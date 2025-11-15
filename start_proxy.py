@@ -56,7 +56,7 @@ def parse_virtual_hosts(config_file):
     :rtype dict: Each entry maps hostname to tuple of (backend(s), policy, headers).
     """
 
-    with open(config_file, 'r') as f:
+    with open(config_file, 'r', encoding='utf-8') as f:
         config_text = f.read()
 
     # Match each host block

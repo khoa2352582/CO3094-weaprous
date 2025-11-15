@@ -40,7 +40,7 @@ app.peers = {}  # key: 'ip:port' -> {ip, port, last_seen}
 app.messages = []  # store received peer messages for local inspection
 
 
-@app.route('/register', methods=['POST'])
+@app.route('/submit-info', methods=['POST'])
 def register(headers=None, body=None):
     """Register a peer. Expects form-encoded body: ip=...&port=...
 
@@ -68,7 +68,7 @@ def register(headers=None, body=None):
         return json.dumps({'status': 'error', 'reason': str(e)})
 
 
-@app.route('/get-peers', methods=['GET'])
+@app.route('/get-list', methods=['GET'])
 def get_peers(headers=None, body=None):
     """Return a list of currently active peers and their status.
     Returns: {'status': 'ok', 'peers': [{ip, port, last_seen},...]}
@@ -163,11 +163,16 @@ def send_peer(headers=None, body=None):
 def get_messages(headers=None, body=None):
     """Return stored peer messages for inspection (JSON)."""
     try:
-        return json.dumps({'messages': app.messages})
+        # Tạo một bản sao của danh sách tin nhắn hiện tại
+        messages_to_send = list(app.messages)
+        
+        # Xóa sạch danh sách tin nhắn trên máy chủ
+        app.messages.clear() 
+        
+        # Trả về bản sao
+        return json.dumps({'messages': messages_to_send})
     except Exception as e:
         return json.dumps({'status': 'error', 'reason': str(e)})
-
-
 if __name__ == "__main__":
     # Parse command-line arguments to configure server IP and port
     parser = argparse.ArgumentParser(prog='Tracker', description='Peer tracker', epilog='WeApRous tracker')
