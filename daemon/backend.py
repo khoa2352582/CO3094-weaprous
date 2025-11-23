@@ -85,9 +85,13 @@ def run_backend(ip, port, routes):
 
         while True:
             conn, addr = server.accept()
-            # spawn a thread to handle the client connection
+            
+            # ============================================
+            # TEAM IMPLEMENTATION: Multi-threaded Client Handling
+            # Spawn a new thread for each client connection
+            # ============================================
             t = threading.Thread(target=handle_client, args=(ip, port, conn, addr, routes))
-            t.daemon = True
+            t.daemon = True  # Daemon thread exits when main thread exits
             t.start()
     except socket.error as e:
       print("Socket error: {}".format(e))

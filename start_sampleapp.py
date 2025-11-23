@@ -34,31 +34,39 @@ from daemon.weaprous import WeApRous
 
 PORT = 8000  # Default port
 
+# ============================================
+# TEAM IMPLEMENTATION - TASK 2: HYBRID P2P CHAT
+# Tracker server for peer discovery and messaging
+# Implements 4 RESTful API endpoints for P2P communication
+# ============================================
+
 # create app and an in-memory peer registry
 app = WeApRous()
 app.peers = {}  # key: 'ip:port' -> {ip, port, last_seen}
 app.messages = []  # store received peer messages for local inspection
 
 
+# ============================================
+# API 1: /submit-info (POST)
+# Registers a peer in the tracker's peer list
+# Used during initial connection and periodic keepalive
+# ============================================
 @app.route('/submit-info', methods=['POST'])
 def register(headers=None, body=None):
-    """Register a peer. Expects form-encoded body: ip=...&port=...
-
+    """
+    Register a peer. Expects form-encoded body: ip=...&port=...
     Returns JSON: {'status':'ok'} on success.
     """
     try:
-        # try parse body as form data
-        data = {}
-        if isinstance(body, str):
-            data = {k: v[0] for k, v in parse_qs(body).items()}
-        elif isinstance(body, dict):
-            data = body
-
+        # Parse body (dict or form-encoded string)
+        data = body if isinstance(body, dict) else {k: v[0] for k, v in parse_qs(body).items()}
+        
         ip = data.get('ip')
         port = data.get('port')
         if not ip or not port:
             return json.dumps({'status': 'error', 'reason': 'missing ip or port'})
 
+        # Store peer with timestamp for timeout management
         key = f"{ip}:{port}"
         app.peers[key] = {'ip': ip, 'port': int(port), 'last_seen': time.time()}
         print(f"[Tracker] Registered peer {key}")
@@ -68,9 +76,15 @@ def register(headers=None, body=None):
         return json.dumps({'status': 'error', 'reason': str(e)})
 
 
+# ============================================
+# API 2: /get-list (GET)
+# Returns list of active peers for discovery
+# Automatically removes stale peers (5-minute timeout)
+# ============================================
 @app.route('/get-list', methods=['GET'])
 def get_peers(headers=None, body=None):
-    """Return a list of currently active peers and their status.
+    """
+    Return a list of currently active peers and their status.
     Returns: {'status': 'ok', 'peers': [{ip, port, last_seen},...]}
     """
     try:
@@ -99,29 +113,33 @@ def get_peers(headers=None, body=None):
         return json.dumps({'status': 'error', 'reason': str(e)})
 
 
+# ============================================
+# API 3: /send-peer (POST)
+# Handles P2P messaging with handshake protocol
+# First contact: Sender info + is_first=true -> Receiver responds with their info
+# Subsequent messages: Direct P2P communication
+# ============================================
 @app.route('/send-peer', methods=['POST'])
 def send_peer(headers=None, body=None):
-    """Handle peer messages with the initial handshake protocol.
+    """
+    Handle peer messages with the initial handshake protocol.
     
     First message: Sender includes their info, receiver responds with their info
     Subsequent messages: Direct P2P communication
     
-    Accepts JSON: {
-        "from_ip": "...",
-        "from_port": 9001,
-        "message": "...",
-        "is_first": true/false  # indicates if this is first contact
-    }
+    Accepts JSON: {"from_ip": "...", "from_port": 9001, "message": "...", "is_first": true/false}
     """
     try:
-        data = {}
+        # Parse JSON or form-encoded body
         if isinstance(body, dict):
             data = body
         elif isinstance(body, str):
             try:
                 data = json.loads(body)
-            except Exception:
+            except:
                 data = {k: v[0] for k, v in parse_qs(body).items()}
+        else:
+            return json.dumps({'status': 'error', 'reason': 'invalid body format'})
 
         sender_ip = data.get('from_ip') or data.get('ip')
         sender_port = data.get('from_port') or data.get('port')
@@ -131,26 +149,24 @@ def send_peer(headers=None, body=None):
         if not sender_ip or not sender_port or not message:
             return json.dumps({'status': 'error', 'reason': 'missing required fields'})
 
-        # Store the message
-        entry = {
+        # Store message
+        app.messages.append({
             'from_ip': sender_ip,
             'from_port': int(sender_port),
             'message': message,
             'received_at': time.time()
-        }
-        app.messages.append(entry)
+        })
         
-        # If this is first contact, respond with our info for P2P
+        # Handshake Protocol: If first contact, respond with our info for P2P
         if is_first:
             print(f"[Peer] First contact from {sender_ip}:{sender_port}")
             return json.dumps({
                 'status': 'ok',
-                'request_info': True,  # indicates we want their info
-                'ip': app.ip,         # our IP for them to contact us
-                'port': app.port      # our port for them to contact us
+                'request_info': True,
+                'ip': app.ip,
+                'port': app.port
             })
         
-        # Normal response for subsequent messages
         print(f"[Peer] Message from {sender_ip}:{sender_port} -> {message}")
         return json.dumps({'status': 'ok'})
         
@@ -159,17 +175,17 @@ def send_peer(headers=None, body=None):
         return json.dumps({'status': 'error', 'reason': str(e)})
 
 
+# ============================================
+# API 4: /messages (GET)
+# Returns all stored peer messages (for debugging/inspection)
+# Clears message buffer after retrieval
+# ============================================
 @app.route('/messages', methods=['GET'])
 def get_messages(headers=None, body=None):
     """Return stored peer messages for inspection (JSON)."""
     try:
-        # Tạo một bản sao của danh sách tin nhắn hiện tại
         messages_to_send = list(app.messages)
-        
-        # Xóa sạch danh sách tin nhắn trên máy chủ
-        app.messages.clear() 
-        
-        # Trả về bản sao
+        app.messages.clear()
         return json.dumps({'messages': messages_to_send})
     except Exception as e:
         return json.dumps({'status': 'error', 'reason': str(e)})

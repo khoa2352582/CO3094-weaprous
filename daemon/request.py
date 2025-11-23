@@ -125,16 +125,20 @@ class Request():
         # prepare headers from header section
         self.headers = self.prepare_headers(hdr_part)
 
-        # parse cookies into dict
+        # ============================================
+        # TEAM IMPLEMENTATION: Cookie Parsing
+        # Parse Cookie header into dictionary
+        # ============================================
         cookie_hdr = self.headers.get('cookie', '')
         cookies = {}
         if cookie_hdr:
+            # Cookie format: "name1=value1; name2=value2; ..."
             for pair in cookie_hdr.split(';'):
                 pair = pair.strip()
                 if not pair:
                     continue
                 if '=' in pair:
-                    k, v = pair.split('=', 1)
+                    k, v = pair.split('=', 1)  # Split at first '=' only
                     cookies[k.strip()] = v.strip()
         self.cookies = cookies
 
@@ -158,14 +162,20 @@ class Request():
         Prepare the request body. Accepts raw data and parses common formats.
         Currently supports application/x-www-form-urlencoded parsing into self.form.
         """
-        # store raw body
+        # Store raw body
         self.body = data
 
-        # try to parse form-encoded body
+        # ============================================
+        # TEAM IMPLEMENTATION: Form Data Parsing
+        # Parse application/x-www-form-urlencoded body
+        # ============================================
         form = {}
         try:
+            # Parse query string format: "key1=value1&key2=value2"
             parsed = parse_qs(data, keep_blank_values=True)
-            # flatten values
+            # parse_qs returns: {'key1': ['value1'], 'key2': ['value2']}
+            
+            # Flatten to single values: {'key1': 'value1', 'key2': 'value2'}
             form = {k: v[0] for k, v in parsed.items()}
         except Exception:
             form = {}

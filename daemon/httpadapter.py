@@ -102,18 +102,22 @@ class HttpAdapter:
         # Response handler
         resp = self.response
 
-        # Read request (simple loop to attempt reading header+body)
+        # ============================================
+        # TEAM IMPLEMENTATION: Robust Request Reading
+        # Read complete HTTP request including body based on Content-Length
+        # ============================================
         data = b''
         try:
-            # read first chunk
+            # Read first chunk (headers + possible body start)
             chunk = conn.recv(4096)
             data += chunk
-            # if headers indicate a body, try to read remaining bytes
-            # quick parse to find Content-Length
+            
+            # Find end of headers (blank line: \r\n\r\n)
             hdr_end = data.find(b'\r\n\r\n')
             if hdr_end != -1:
                 headers_blob = data[:hdr_end].decode(errors='ignore')
-                # attempt to find content-length
+                
+                # Parse Content-Length header to determine body size
                 cl = 0
                 for line in headers_blob.split('\r\n'):
                     if ':' in line:
@@ -124,8 +128,12 @@ class HttpAdapter:
                             except Exception:
                                 cl = 0
                             break
+                
+                # Calculate remaining body bytes to read
                 body_len = len(data) - (hdr_end + 4)
                 to_read = cl - body_len
+                
+                # Read remaining body bytes if needed
                 while to_read > 0:
                     more = conn.recv(4096)
                     if not more:
@@ -136,17 +144,22 @@ class HttpAdapter:
             conn.close()
             return
 
+        # Decode raw request data
         try:
             raw = data.decode('utf-8', errors='ignore')
         except Exception:
             raw = ''
 
+        # Parse HTTP request into Request object
         req.prepare(raw, routes)
 
         method = (req.method or '').upper()
         path = req.path or ''
 
-        # Handle CORS preflight OPTIONS requests early
+        # ============================================
+        # TEAM IMPLEMENTATION: CORS Preflight Handling
+        # Handle OPTIONS requests for cross-origin API calls
+        # ============================================
         if method == 'OPTIONS':
             r = Response()
             r.status_code = 200
@@ -154,61 +167,93 @@ class HttpAdapter:
             r.headers['Access-Control-Allow-Origin'] = '*'
             r.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
             r.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-            r.headers['Content-Type'] = 'text/plain' # Gán một loại content-type
+            r.headers['Content-Type'] = 'text/plain'
             r._content = b''
             conn.sendall(r.build_response_header(req))
             conn.close()
             return
 
-        # # Task 1B: protect index
+        # ============================================
+        # TEAM IMPLEMENTATION - TASK 1B
+        # Cookie-based access control for protected pages
+        # ============================================
         if path == '/' or path == '/index.html':
+            # Check if auth cookie exists and is valid
             auth = getattr(req, 'cookies', {}) or {}
             if auth.get('auth') != 'true':
+                # No valid cookie -> Send 401 Unauthorized
                 r = Response()
                 conn.sendall(r.build_unauthorized())
                 conn.close()
                 return
+            # Cookie valid -> Continue to serve page
 
-        # Task 1A: POST /login
+        # ============================================
+        # TEAM IMPLEMENTATION - TASK 1A
+        # POST /login authentication handler
+        # ============================================
         if method == 'POST' and path.rstrip('/') == '/login':
+            # Extract form data (username, password)
             form = getattr(req, 'form', {}) or {}
             username = form.get('username', '')
             password = form.get('password', '')
+            
             r = Response()
+            
+            # Validate credentials
             if username == 'admin' and password == 'password':
+                # ✅ Login success
                 r.status_code = 200
                 r.reason = 'OK'
+                
+                # Load index.html from www/
                 base_dir = r.prepare_content_type(mime_type='text/html')
                 c_len, content = r.build_content('/index.html', base_dir)
                 r._content = content
-                # set cookie
+                
+                # Set auth cookie (session management)
                 r.cookies = {'auth': 'true'}
-                # allow cross-origin access for tracker clients
+                
+                # Allow CORS for tracker clients
                 r.headers['Access-Control-Allow-Origin'] = '*'
+                
+                # Send response
                 hdr = r.build_response_header(req)
                 conn.sendall(hdr + r._content)
                 conn.close()
                 return
             else:
+                # ❌ Login failed -> Send 401 Unauthorized
                 conn.sendall(r.build_unauthorized())
                 conn.close()
                 return
 
-        # App hook
+        # ============================================
+        # TEAM IMPLEMENTATION: WeApRous Route Handler
+        # Handle RESTful API endpoints from @app.route() decorators
+        # ============================================
         if req.hook:
             try:
+                # Call handler function with headers and body
                 result = req.hook(headers=req.headers, body=getattr(req, 'body', None))
+                
+                # Handler returns JSON string or bytes
                 if isinstance(result, (str, bytes)):
                     if isinstance(result, str):
                         result = result.encode('utf-8')
+                    
+                    # Build JSON response
                     r = Response()
                     r.status_code = 200
                     r.reason = 'OK'
                     r._content = result
                     r.headers['Content-Type'] = 'application/json'
-                    # allow CORS for API endpoints
+                    
+                    # Allow CORS for P2P and tracker API calls
                     r.headers['Access-Control-Allow-Origin'] = '*'
                     r.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+                    
+                    # Send response
                     conn.sendall(r.build_response_header(req) + r._content)
                     conn.close()
                     return

@@ -197,11 +197,15 @@ class Response():
         header_lines = []
         for key, value in headers.items():
             header_lines.append("{}: {}\r\n".format(key, value))
-        # Set-Cookie support (THÊM LẠI TỪ TỆP 1)
+        
+        # ============================================
+        # TEAM IMPLEMENTATION: Set-Cookie Header Support
+        # Add Set-Cookie headers for session management
+        # ============================================
         try:
             if isinstance(self.cookies, dict):
                 for k, v in self.cookies.items():
-                    # Đảm bảo không thêm vào dict 'headers' mà thêm vào 'header_lines'
+                    # Set-Cookie format with security flags
                     header_lines.append('Set-Cookie: {}={}; Path=/; HttpOnly\r\n'.format(k, v))
         except Exception:
             pass
@@ -212,9 +216,16 @@ class Response():
         fmt_header = status_line + all_headers_string + "\r\n"
         return fmt_header.encode('utf-8')
 
-    ########################################### Error Response #################################
-    # 404 Not Found #
+    # ============================================
+    # TEAM IMPLEMENTATION: HTTP Error Responses
+    # ============================================
+    
     def build_notfound(self):
+        """
+        Constructs a standard 404 Not Found HTTP response.
+        
+        :rtype bytes: Encoded 404 response.
+        """
         return (
                 "HTTP/1.1 404 Not Found\r\n"
                 "Accept-Ranges: bytes\r\n"
@@ -226,8 +237,13 @@ class Response():
                 "404 Not Found"
             ).encode('utf-8')
         
-    # 401 Unauthorized #
     def build_unauthorized(self):
+        """
+        Constructs a standard 401 Unauthorized HTTP response.
+        Used for authentication failures (Task 1A, 1B).
+        
+        :rtype bytes: Encoded 401 response.
+        """
         return (
                 "HTTP/1.1 401 Unauthorized\r\n"
                 "Content-Type: text/html\r\n"

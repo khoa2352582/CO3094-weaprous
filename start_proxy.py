@@ -59,50 +59,37 @@ def parse_virtual_hosts(config_file):
     with open(config_file, 'r', encoding='utf-8') as f:
         config_text = f.read()
 
-    # Match each host block
+    # ============================================
+    # TEAM IMPLEMENTATION: Configuration Parsing
+    # Parses proxy.conf with regex to extract:
+    # - Virtual hosts (host blocks)
+    # - Backend servers (proxy_pass directives)
+    # - Load balancing policy (dist_policy)
+    # - Custom headers (proxy_set_header directives)
+    # ============================================
+
     host_blocks = re.findall(r'host\s+"([^"]+)"\s*\{(.*?)\}', config_text, re.DOTALL)
-
-    dist_policy_map = ""
-
     routes = {}
+    
     for host, block in host_blocks:
-        proxy_map = {}
-        headers_map = {}
-
-        # Find all proxy_pass entries
+        # Extract proxy_pass backends
         proxy_passes = re.findall(r'proxy_pass\s+http://([^\s;]+);', block)
-        map = proxy_map.get(host,[])
-        map = map + proxy_passes
-        proxy_map[host] = map
-
-        # Find proxy_set_header directives
-        header_matches = re.findall(r'proxy_set_header\s+(\S+)\s+([^;]+);', block)
-        for header_name, header_value in header_matches:
+        
+        # Extract custom headers
+        headers_map = {}
+        for header_name, header_value in re.findall(r'proxy_set_header\s+(\S+)\s+([^;]+);', block):
             headers_map[header_name] = header_value.strip()
-
-        # Find dist_policy if present
+        
+        # Extract load balancing policy
         policy_match = re.search(r'dist_policy\s+(\w+)', block)
-        if policy_match:
-            dist_policy_map = policy_match.group(1)
-        else: #default policy is round_robin
-            dist_policy_map = 'round-robin'
-            
-        #
-        # @bksysnet: Build the mapping and policy
-        # TODO: this policy varies among scenarios 
-        #       the default policy is provided with one proxy_pass
-        #       In the multi alternatives of proxy_pass then
-        #       the policy is applied to identify the highes matching
-        #       proxy_pass
-        #
-        if len(proxy_map.get(host,[])) == 1:
-            routes[host] = (proxy_map.get(host,[])[0], dist_policy_map, headers_map)
-        # esle if:
-        #         TODO:  apply further policy matching here
-        #
+        policy = policy_match.group(1) if policy_match else 'round-robin'
+        
+        # Store route: single backend as string, multiple as list
+        if len(proxy_passes) == 1:
+            routes[host] = (proxy_passes[0], policy, headers_map)
         else:
-            routes[host] = (proxy_map.get(host,[]), dist_policy_map, headers_map)
-
+            routes[host] = (proxy_passes, policy, headers_map)
+    
     for key, value in routes.items():
         print(key, value)
     return routes
