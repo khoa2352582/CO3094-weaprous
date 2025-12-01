@@ -20,6 +20,7 @@ the corresponding responses to clients.
 """
 import socket
 import threading
+import time
 from .response import *
 from .httpadapter import HttpAdapter
 from .dictionary import CaseInsensitiveDict
@@ -33,7 +34,9 @@ PROXY_PASS = {
 }
 
 
-def forward_request(host, port, request, custom_headers=None): #thêm custom_headers
+
+def forward_request(host, port, request, custom_headers=None, track_time=False):
+
     """
     Forwards an HTTP request to a backend server and retrieves the response.
 
@@ -42,59 +45,67 @@ def forward_request(host, port, request, custom_headers=None): #thêm custom_hea
     :params request (str): incoming HTTP request.
     :params custom_headers (dict): optional custom headers to add/modify in the request.
 
-    :rtype bytes: Raw HTTP response from the backend server. If the connection
-                  fails, returns a 404 Not Found response.
+    :params track_time (bool): if True, returns (response, elapsed_time) tuple.
+
+
+    :rtype bytes or tuple: Raw HTTP response from the backend server. If the connection
+                  fails, returns a 404 Not Found response. If track_time=True, returns
+                  (response, elapsed_time) tuple.
     """
 
     backend = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    start_time = time.time() if track_time else None
 
     try:
-        # ============================================
-        # TEAM IMPLEMENTATION: Custom Header Injection
-        # Implements proxy_set_header directive from proxy.conf
-        # Supports variable substitution like $host (replaced with actual Host header value)
-        # Modifies existing headers or adds new ones before forwarding to backend
-        # ============================================
+
+        #
+        # TODO: Apply custom headers if provided (e.g., proxy_set_header directives)
+        #       Modify the request to include or replace headers based on custom_headers
+        #
         if custom_headers:
             request_lines = request.split('\r\n')
-            
-            # Extract actual host value for $host substitution
-            actual_host = None
-            for line in request_lines:
-                if line.lower().startswith('host:'):
-                    actual_host = line.split(':', 1)[1].strip()
-                    break
-            
-            # Process custom headers with variable substitution
-            processed_headers = {}
-            for name, value in custom_headers.items():
-                if '$host' in value and actual_host:
-                    value = value.replace('$host', actual_host)
-                processed_headers[name.lower()] = (name, value)
-            
-            # Replace or keep original headers, add new ones
             modified_lines = []
-            headers_section = True
+            headers_added = set()
+            
             for line in request_lines:
-                if headers_section and line == '':
-                    # End of headers - add any missing custom headers
-                    for name, value in processed_headers.values():
-                        modified_lines.append("{}: {}".format(name, value))
-                    processed_headers.clear()
-                    headers_section = False
-                    modified_lines.append(line)
-                elif ':' in line and line.strip() and headers_section:
-                    header_name = line.split(':', 1)[0].strip().lower()
-                    if header_name in processed_headers:
-                        # Replace with custom header
-                        name, value = processed_headers.pop(header_name)
-                        modified_lines.append("{}: {}".format(name, value))
-                    else:
+                if ':' in line and line.strip():
+                    header_name = line.split(':', 1)[0].strip()
+                    replaced = False
+                    for custom_name, custom_value in custom_headers.items():
+                        if header_name.lower() == custom_name.lower():
+                            if '$host' in custom_value:
+                                for req_line in request_lines:
+                                    if req_line.lower().startswith('host:'):
+                                        actual_host = req_line.split(':', 1)[1].strip()
+                                        custom_value = custom_value.replace('$host', actual_host)
+                                        break
+                            modified_lines.append("{}: {}".format(custom_name, custom_value))
+                            headers_added.add(custom_name.lower())
+                            replaced = True
+                            break
+                    if not replaced:
+
                         modified_lines.append(line)
                 else:
                     modified_lines.append(line)
             
+
+            for custom_name, custom_value in custom_headers.items():
+                if custom_name.lower() not in headers_added:
+                    for i, line in enumerate(modified_lines):
+                        if line == '':
+                            if '$host' in custom_value:
+                                for req_line in request_lines:
+                                    if req_line.lower().startswith('host:'):
+                                        actual_host = req_line.split(':', 1)[1].strip()
+                                        custom_value = custom_value.replace('$host', actual_host)
+                                        break
+                            modified_lines.insert(i, "{}: {}".format(custom_name, custom_value))
+                            break
+            
             request = '\r\n'.join(modified_lines)
+
+
         backend.connect((host, port))
         backend.sendall(request.encode('latin-1'))
 
@@ -105,11 +116,27 @@ def forward_request(host, port, request, custom_headers=None): #thêm custom_hea
             if not chunk:
                 break
             response += chunk
+        
+        if track_time:
+            elapsed_time = time.time() - start_time
+            return response, elapsed_time
         return response
         
     except socket.error as e:
         print("Socket error: {}".format(e))
-        return b"HTTP/1.1 404 Not Found\r\nContent-Type: text/plain\r\nContent-Length: 13\r\nConnection: close\r\n\r\n404 Not Found"
+
+        error_response = (
+            "HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 13\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "404 Not Found"
+        ).encode('utf-8')
+        if track_time:
+            return error_response, 999999  # Large penalty time for failed connections
+        return error_response
+
     finally:
         backend.close()
 
@@ -129,38 +156,78 @@ def resolve_routing_policy(hostname, routes):
     """
     print("[Proxy] Resolving policy for hostname: {}".format(hostname))
 
-    # Get config or use default
-    config = routes.get(hostname, (['127.0.0.1:9000'], 'round-robin', {}))
-    proxy_map, policy = config[0], config[1]
-    headers = config[2] if len(config) > 2 else {}
+    # Default fallback
+    default_config = ('127.0.0.1:9000', 'srtf', {})
+    config = routes.get(hostname, default_config)
     
-    print("[Proxy] Route config found: Map={}, Policy={}, Headers={}".format(proxy_map, policy, headers))
-
-    # ============================================
-    # TEAM IMPLEMENTATION: Handle both string and list proxy_map
-    # - String: Single backend (e.g., "127.0.0.1:9000")
-    # - List: Multiple backends with load balancing
-    # ============================================
-    
-    # Convert string to list for uniform handling
-    backends = [proxy_map] if isinstance(proxy_map, str) else proxy_map
-    
-    if not backends:
-        proxy_host, proxy_port = '127.0.0.1', '9000'
-    elif len(backends) == 1:
-        proxy_host, proxy_port = backends[0].split(':', 1)
+    # Handle config parsing (2 items or 3 items)
+    if len(config) == 2:
+        proxy_map, policy = config
+        headers = {}
     else:
-        # Round-robin load balancing
-        print("[Proxy] Load balancing for: {}".format(hostname))
-        if policy == 'round-robin':
+        proxy_map, policy, headers = config
+    
+    proxy_host = '127.0.0.1'
+    proxy_port = 9000
+
+    # CASE 1: proxy_map is a LIST (Load Balancing)
+    if isinstance(proxy_map, list):
+        if len(proxy_map) == 0:
+            print("[Proxy] Empty proxy_map for {}".format(hostname))
+            return proxy_host, proxy_port, headers
+            
+        # --- Policy: SRTF ---
+        if policy in ['srtf', 'shortest-time']:
+            # Initialize tracking structures if not exists
+            if not hasattr(resolve_routing_policy, 'response_times'):
+                resolve_routing_policy.response_times = {}
+                resolve_routing_policy.request_count = {}
+            
+            if hostname not in resolve_routing_policy.response_times:
+                resolve_routing_policy.response_times[hostname] = {}
+                resolve_routing_policy.request_count[hostname] = {}
+                # Init defaults
+                for backend in proxy_map:
+                    resolve_routing_policy.response_times[hostname][backend] = 0.1
+                    resolve_routing_policy.request_count[hostname][backend] = 0
+            
+            # Find best backend
+            shortest_time = float('inf')
+            best_backend = proxy_map[0]
+            
+            for backend in proxy_map:
+                # Get current avg time, default 0.1s
+                avg_time = resolve_routing_policy.response_times[hostname].get(backend, 0.1)
+                if avg_time < shortest_time:
+                    shortest_time = avg_time
+                    best_backend = backend
+            
+            print("[Proxy] SRTF selected {} (avg: {:.3f}s)".format(best_backend, shortest_time))
+            proxy_host, proxy_port = best_backend.split(":", 1)
+
+        # --- Policy: Round-Robin (Default for list) ---
+        else: 
+            # Logic Round-Robin cũ của bạn, đã sửa tên biến backends -> proxy_map
             if not hasattr(resolve_routing_policy, 'counter'):
                 resolve_routing_policy.counter = {}
+            
             count = resolve_routing_policy.counter.get(hostname, 0)
-            backend = backends[count % len(backends)]
+            backend = proxy_map[count % len(proxy_map)]
             resolve_routing_policy.counter[hostname] = count + 1
+            
+            print("[Proxy] Round-Robin selected {}".format(backend))
             proxy_host, proxy_port = backend.split(':', 1)
-        else:
-            proxy_host, proxy_port = backends[0].split(':', 1)
+
+    # CASE 2: proxy_map is a STRING (Direct Mapping)
+    else:
+        # Nếu chỉ có 1 server, cứ lấy server đó
+        proxy_host, proxy_port = proxy_map.split(":", 1)
+
+    # Normalize port to integer
+    try:
+        proxy_port = int(proxy_port)
+    except Exception:
+        proxy_port = 9000
 
     return proxy_host, proxy_port, headers
 
@@ -178,60 +245,28 @@ def handle_client(ip, port, conn, addr, routes):
     Fixed version with robust request reading and proper encoding.
     """
 
-    # ============================================
-    # TEAM IMPLEMENTATION: Robust Request Reading
-    # Reads complete HTTP request including headers and body
-    # Handles Content-Length to ensure full body is received
-    # Uses latin-1 encoding for binary-safe operations
-    # ============================================
-    
+
+    # Read request headers (simple loop until header terminator or timeout)
+    conn.settimeout(1.0)
+    raw = b""
     try:
-        # Read headers (until \r\n\r\n)
-        data = b""
-        conn.settimeout(5.0)
-        while b"\r\n\r\n" not in data:
+        while True:
             chunk = conn.recv(4096)
             if not chunk:
-                conn.close()
-                return
-            data += chunk
-        conn.settimeout(None)
-
-        # Parse headers and extract Content-Length
-        header_part, _, body_part = data.partition(b"\r\n\r\n")
-        headers_text = header_part.decode('latin-1')
-        
-        content_length = 0
-        for line in headers_text.splitlines():
-            if line.lower().startswith("content-length:"):
-                content_length = int(line.split(":", 1)[1].strip())
                 break
+            raw += chunk
+            if b"\r\n\r\n" in raw:
+                # stop after headers read; body handling could be added using Content-Length
+                break
+    except socket.timeout:
+        pass
 
-        # Read remaining body if needed
-        body_bytes = body_part
-        remaining = content_length - len(body_bytes)
-        if remaining > 0:
-            conn.settimeout(5.0)
-            while remaining > 0:
-                chunk = conn.recv(min(remaining, 4096))
-                if not chunk:
-                    break
-                body_bytes += chunk
-                remaining -= len(chunk)
-            conn.settimeout(None)
+    request = raw.decode('utf-8', errors='ignore')
 
-        # Reconstruct complete request
-        full_request_str = headers_text + "\r\n\r\n" + body_bytes.decode('latin-1', errors='ignore')
-        
-    except Exception as e:
-        print(f"[Proxy] Request reading error: {e}")
-        conn.close()
-        return
+    # Extract hostname safely
+    hostname = ""
+    for line in request.splitlines():
 
-
-    # Extract hostname from Host header
-    hostname = None
-    for line in headers_text.splitlines():
         if line.lower().startswith('host:'):
             hostname = line.split(':', 1)[1].strip()
             break
@@ -242,15 +277,50 @@ def handle_client(ip, port, conn, addr, routes):
         conn.close()
         return
 
-    print("[Proxy] {} requesting Host: {}".format(addr, hostname))
 
-    # Resolve backend target and forward request
+    # Resolve the matching destination in routes
     resolved_host, resolved_port, custom_headers = resolve_routing_policy(hostname, routes)
-    resolved_port = int(resolved_port) if resolved_port.isdigit() else 9000
-    
-    print("[Proxy] Forwarding {} to {}:{}".format(hostname, resolved_host, resolved_port))
-    response = forward_request(resolved_host, resolved_port, full_request_str, custom_headers)
-    
+
+    if resolved_host:
+        print("[Proxy] Host name {} is forwarded to {}:{}".format(hostname, resolved_host, resolved_port))
+        # Call forward_request with custom_headers from config and track time for SRTF
+        result = forward_request(resolved_host, resolved_port, request, custom_headers, track_time=True)
+        
+        # Update SRTF statistics
+        if isinstance(result, tuple):
+            response, elapsed_time = result
+            backend_key = "{}:{}".format(resolved_host, resolved_port)
+            
+            # Update average response time using exponential moving average
+            if hasattr(resolve_routing_policy, 'response_times'):
+                if hostname in resolve_routing_policy.response_times:
+                    if backend_key in resolve_routing_policy.response_times[hostname]:
+                        old_avg = resolve_routing_policy.response_times[hostname][backend_key]
+                        # EMA: new_avg = 0.7 * old_avg + 0.3 * new_time
+                        resolve_routing_policy.response_times[hostname][backend_key] = \
+                            0.7 * old_avg + 0.3 * elapsed_time
+                    else:
+                        resolve_routing_policy.response_times[hostname][backend_key] = elapsed_time
+                    
+                    # Increment request count
+                    if backend_key in resolve_routing_policy.request_count[hostname]:
+                        resolve_routing_policy.request_count[hostname][backend_key] += 1
+                    
+                    print("[Proxy] Backend {} response time: {:.3f}s (avg: {:.3f}s)".format(
+                        backend_key, elapsed_time, 
+                        resolve_routing_policy.response_times[hostname][backend_key]))
+        else:
+            response = result
+    else:
+        response = (
+            "HTTP/1.1 404 Not Found\r\n"
+            "Content-Type: text/plain\r\n"
+            "Content-Length: 13\r\n"
+            "Connection: close\r\n"
+            "\r\n"
+            "404 Not Found"
+        ).encode('utf-8')
+
     conn.sendall(response)
     conn.close()
 
@@ -277,12 +347,13 @@ def run_proxy(ip, port, routes):
         print("[Proxy] Listening on IP {} port {}".format(ip, port))
         while True:
             conn, addr = proxy.accept()
-            
-            # ============================================
-            # TEAM IMPLEMENTATION: Multi-threaded Client Handling
-            # Spawns daemon thread for each incoming connection
-            # Allows concurrent processing of multiple client requests
-            # ============================================
+
+            #
+            #  TODO: implement the step of the client incomping connection
+            #        using multi-thread programming with the
+            #        provided handle_client routine
+            #
+
             client_thread = threading.Thread(
                 target=handle_client,
                 args=(ip, port, conn, addr, routes)

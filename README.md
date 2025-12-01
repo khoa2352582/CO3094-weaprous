@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Đồ án Mạng Máy Tính: HTTP Server & Chat Hybrid
 
 Đây là hướng dẫn đầy đủ để cài đặt, chạy và kiểm tra cả hai phần của đồ án.
