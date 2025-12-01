@@ -25,7 +25,8 @@
   // Called on initial connection and when tracker restarts
   // ============================================
   async function register() {
-    myIp = window.location.hostname;
+    //myIp = window.location.hostname;
+    myIp = $('myIp').value || window.location.hostname;
     myPort = $("port").value || "9001";
     const name = $("username").value || "guest";
 
