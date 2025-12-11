@@ -27,14 +27,21 @@ Trước khi chạy, bạn cần biết địa chỉ IP của máy ảo.
     
     **Ví dụ (nếu IP là 192.168.1.50):**
     ```conf
-    host "192.168.1.50:8080" {
-        proxy_pass [http://192.168.1.50:9000](http://192.168.1.50:9000);
-    }
+   host "192.168.1.50:8080" {
+    proxy_pass http://192.168.1.50:9000;
 
-    host "app1.local" {
-        proxy_pass [http://192.168.1.50:9001](http://192.168.1.50:9001);
+    dist_policy srtf;
+
     }
-    ```
+host "app1.local" {
+    proxy_pass http://192.168.1.50:9001;
+}
+host "app2.local" {
+    proxy_set_header Host $host;
+    
+    proxy_pass http://192.168.1.50:9002;  # Sửa cả những IP này
+    dist_policy round-robin;
+}
 
 ---
 
