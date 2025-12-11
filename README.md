@@ -1,158 +1,138 @@
-<<<<<<< HEAD
 # Đồ án Mạng Máy Tính: HTTP Server & Chat Hybrid
 
-Đây là hướng dẫn đầy đủ để cài đặt, chạy và kiểm tra cả hai phần của đồ án.
+Đây là hướng dẫn đầy đủ để cài đặt, chạy và kiểm tra cả hai phần của đồ án trên môi trường **Máy ảo Linux**.
 
-## Yêu cầu
+## 📋 Yêu cầu
 
-* Python 3.x
-* Một công cụ test API như **Postman** (rất quan trọng cho Task 1)
-* Một trình duyệt web hiện đại (Chrome, Firefox...) (cho Task 2)
+* **Trên Máy ảo:** Python 3.x
+* **Trên Máy thật (Windows/Mac):**
+    * Công cụ test API như **Postman** (cho Task 1)
+    * Trình duyệt web (Chrome, Firefox...) (cho Task 2)
+* **Cấu hình mạng:** Máy ảo nên để chế độ **Bridged Adapter** để có IP riêng.
 
-## Cấu hình (Rất quan trọng!)
+---
 
-Toàn bộ dự án này được thiết kế để chạy trên máy cục bộ của bạn (`127.0.0.1` hay `localhost`).
+## ⚙️ Cấu hình (Bước đầu tiên quan trọng!)
 
-Trước khi chạy bất cứ thứ gì, hãy đảm bảo file `config/proxy.conf` của bạn đã được cấu hình để trỏ đến `127.0.0.1`.
+Trước khi chạy, bạn cần biết địa chỉ IP của máy ảo.
 
-**File `config/proxy.conf` phải trông như thế này:**
-```conf
-host "127.0.0.1:8080" {
-    proxy_pass [http://127.0.0.1:9000](http://127.0.0.1:9000);
-}
+1.  Mở terminal trên máy ảo, chạy lệnh:
+    ```bash
+    ifconfig
+    ```
+    *(Ghi lại địa chỉ IP, ví dụ: `192.168.1.50`. Trong bài hướng dẫn này, chúng ta gọi nó là `<IP_MAY_AO>`)*.
 
-host "app1.local" {
-    proxy_pass [http://127.0.0.1:9001](http://127.0.0.1:9001);
-}
-## Nếu chạy bằng máy ảo hãy ifconfig để lấy ip máy ảo và thay thế 127.0.0.1
-# ... và các host khác cũng trỏ về 127.0.0.1 ...
-🚀 Task 1: Kiểm tra Máy chủ HTTP & Cookie Session (backend.py, httpadapter.py, proxy.py, request.py, respone.py, proxy.conf, index va css)
-Phần này kiểm tra xem máy chủ có bảo vệ trang index.html và cấp cookie khi đăng nhập đúng hay không.
+2.  Sửa file `config/proxy.conf`:
+    Thay thế tất cả `127.0.0.1` bằng `<IP_MAY_AO>` của bạn.
+    
+    **Ví dụ (nếu IP là 192.168.1.50):**
+    ```conf
+    host "192.168.1.50:8080" {
+        proxy_pass [http://192.168.1.50:9000](http://192.168.1.50:9000);
+    }
 
-Bước 1: Chạy 2 Terminal
-Bạn cần 2 cửa sổ terminal đang chạy.
+    host "app1.local" {
+        proxy_pass [http://192.168.1.50:9001](http://192.168.1.50:9001);
+    }
+    ```
 
-Terminal 1 (Backend):
+---
 
-Bash
+## 🚀 Task 1: Kiểm tra Máy chủ HTTP & Cookie Session
+*(Các file liên quan: backend.py, httpadapter.py, proxy.py, request.py, respone.py, proxy.conf, index.html, styles.css)*
 
-# (Đảm bảo bạn đang ở trong thư mục dự án)
-python3 start_backend.py --server-ip 127.0.0.1 --server-port 9000
-Kết quả mong đợi: [Backend] Listening on port 9000
+Phần này kiểm tra xem máy chủ có bảo vệ trang web và cấp cookie khi đăng nhập đúng hay không.
 
-Terminal 2 (Proxy):
+### Bước 1: Chạy 2 Terminal trên Máy ảo
 
-Bash
+**Lưu ý:** Chúng ta dùng `--server-ip 0.0.0.0` để chấp nhận kết nối từ máy thật.
 
-# (Đảm bảo bạn đang ở trong thư mục dự án)
-python3 start_proxy.py --server-ip 127.0.0.1 --server-port 8080
-Kết quả mong đợi: [Proxy] Listening on IP 127.0.0.1 port 8080
+* **Terminal 1 (Backend):**
+    ```bash
+    # (Đảm bảo bạn đang ở trong thư mục dự án)
+    python3 start_backend.py --server-ip 0.0.0.0 --server-port 9000
+    ```
+    *Log mong đợi:* `[Backend] Listening on port 9000`
 
-Bước 2: Dùng Postman để Kiểm tra
-Mở Postman và thực hiện 3 bài test sau:
+* **Terminal 2 (Proxy):**
+    ```bash
+    # (Đảm bảo bạn đang ở trong thư mục dự án)
+    python3 start_proxy.py --server-ip 0.0.0.0 --server-port 8080
+    ```
+    *Log mong đợi:* `[Proxy] Listening on IP 0.0.0.0 port 8080`
 
-Test 1 (Truy cập thất bại):
+### Bước 2: Dùng Postman trên Máy thật để kiểm tra
 
-Method: GET
+Mở Postman trên Windows/Mac và thực hiện test với IP của máy ảo.
 
-URL: http://127.0.0.1:8080/index.html
+1.  **Test 1 (Truy cập thất bại):**
+    * Method: `GET`
+    * URL: `http://<IP_MAY_AO>:8080/index.html` (Ví dụ: `http://192.168.1.50:8080/index.html`)
+    * **Kết quả:** Status `401 Unauthorized`.
 
-Kết quả: Status: 401 Unauthorized. (Điều này là ĐÚNG)
+2.  **Test 2 (Đăng nhập thành công):**
+    * Method: `POST`
+    * URL: `http://<IP_MAY_AO>:8080/login`
+    * Body: `x-www-form-urlencoded` -> `username`: `admin`, `password`: `password`
+    * **Kết quả:** Status `200 OK`. (Cookie `auth=true` được lưu).
 
-Test 2 (Đăng nhập thành công):
+3.  **Test 3 (Truy cập thành công):**
+    * Method: `GET`
+    * URL: `http://<IP_MAY_AO>:8080/index.html`
+    * **Kết quả:** Status `200 OK`.
 
-Method: POST
+---
 
-URL: http://127.0.0.1:8080/login
+## 💬 Task 2: Chạy Ứng dụng Chat Hybrid (P2P)
+*(Các file liên quan: weaprous.py, index.html, styles.css, app.js, start_sampleapp.py)*
 
-Tab Body: Chọn x-www-form-urlencoded
+Phần này chạy hệ thống chat P2P. Bạn có thể tắt các terminal của Task 1 đi.
 
-Nhập:
+### Bước 1: Chạy 4 Terminal trên Máy ảo
 
-username = admin
+Sử dụng `--server-ip 0.0.0.0` cho tất cả các lệnh để các máy khác có thể kết nối.
 
-password = password
+* **Terminal 1 (File Server - Phục vụ Web):**
+    ```bash
+    python3 start_backend.py --server-ip 0.0.0.0 --server-port 8080
+    ```
 
-Kết quả: Status: 200 OK. Trong tab "Cookies" của phản hồi, bạn sẽ thấy auth=true.
-
-Test 3 (Truy cập thành công):
-
-Quay lại Test 1 (cái GET lúc nãy).
-
-Nhấn Send một lần nữa.
-
-Kết quả: Status: 200 OK. (Vì Postman đã tự động gửi cookie auth=true theo).
-
-💬 Task 2: Chạy Ứng dụng Chat Hybrid (P2P) (weaprous.py, index.html, styles.css, app.js, start_sampleapp.py)
-Phần này cho phép nhiều người dùng chat với nhau.
-
-(Lưu ý: Bạn có thể TẮT 2 terminal của Task 1 đi nếu muốn, Task 2 chạy độc lập)
-
-Bước 1: Chạy 4 Terminal (hoặc 3 nếu bạn chat 1-1)
-Bạn cần tối thiểu 3 terminal (Tracker, Peer A, Peer B). Chúng ta sẽ dùng 4 terminal để phục vụ file HTML riêng biệt cho rõ ràng.
-
-Terminal 1 (File Server @ 8080):
-
-Nhiệm vụ: Phục vụ index.html và app.js cho trình duyệt.
-
-Bash
-
-python3 start_backend.py --server-ip 127.0.0.1 --server-port 8080
-Log: [Backend] Listening on port 8080
-
-Terminal 2 (Tracker Server @ 8000):
-
-Nhiệm vụ: Máy chủ trung tâm để đăng ký và tìm bạn.
-
-
-
-python3 start_sampleapp.py --server-ip 127.0.0.1 --server-port 8000
-Log: (Backend) Listening on port 8000
-
-Terminal 3 (Peer A @ 9001):
-
-Nhiệm vụ: Lắng nghe tin nhắn P2P cho Peer A.
-
-
-
-python3 start_sampleapp.py --server-ip 127.0.0.1 --server-port 9001
-Log: (Backend) Listening on port 9001
-
-Terminal 4 (Peer B @ 9002):
-
-Nhiệm vụ: Lắng nghe tin nhắn P2P cho Peer B.
-
-
-
-python3 start_sampleapp.py --server-ip 127.0.0.1 --server-port 9002
-Log: (Backend) Listening on port 9002
-
-Bước 2: Mở 2 Tab Trình duyệt
-Khi cả 4 terminal trên đều đang chạy:
-
-Mở Tab 1 (Peer A):
-
-Truy cập: http://127.0.0.1:8080 (Cổng của File Server).
-
-Đổi tên "guest" thành Peer A.
-
-Quan trọng: Đổi "Your port:" thành 9001 (khớp với Terminal 3).
-
-Nhấn "Register with Tracker".
-
-Mở Tab 2 (Peer B):
-
-Truy cập: http://127.0.0.1:8080
-
-Đổi tên "guest" thành Peer B.
-
-Quan trọng: Đổi "Your port:" thành 9002 (khớp với Terminal 4).
-
-Nhấn "Register with Tracker".
-
-Bước 3: Chat!
-Quay lại Tab 1 (Peer A). Trong menu thả xuống, chọn "Peer at 127.0.0.1:9002". Gửi một tin nhắn.
-
-Tin nhắn sẽ xuất hiện ngay lập tức trên Tab 2 (Peer B).
-
-Bạn có thể chat ngược lại, hoặc mở thêm Terminal 5/Tab 3 và test tính năng "BROADCAST TO ALL".
+* **Terminal 2 (Tracker Server - Máy chủ trung tâm):**
+    ```bash
+    python3 start_sampleapp.py --server-ip 0.0.0.0 --server-port 8000
+    ```
+
+* **Terminal 3 (Peer A - Người dùng 1):**
+    ```bash
+    python3 start_sampleapp.py --server-ip 0.0.0.0 --server-port 9001
+    ```
+
+* **Terminal 4 (Peer B - Người dùng 2):**
+    ```bash
+    python3 start_sampleapp.py --server-ip 0.0.0.0 --server-port 9002
+    ```
+
+### Bước 2: Mở Trình duyệt trên Máy thật
+
+Mở trình duyệt (Chrome/Edge/Firefox) trên máy tính thật của bạn.
+
+1.  **Tab 1 (Dành cho Peer A):**
+    * Truy cập: `http://<IP_MAY_AO>:8080`
+    * **Your IP:** Nhập `<IP_MAY_AO>` (Ví dụ: `192.168.1.50`). **Rất quan trọng!**
+    * **Your Port:** `9001`
+    * **Name:** Peer A
+    * Nhấn **Register**.
+
+2.  **Tab 2 (Dành cho Peer B):**
+    * Truy cập: `http://<IP_MAY_AO>:8080`
+    * **Your IP:** Nhập `<IP_MAY_AO>` (Vẫn là IP máy ảo đó).
+    * **Your Port:** `9002`
+    * **Name:** Peer B
+    * Nhấn **Register**.
+
+### Bước 3: Chat P2P
+
+* Quay lại Tab 1. Trong danh sách Peer, bạn sẽ thấy Peer B.
+* Gửi tin nhắn và kiểm tra bên Tab 2.
+* Thử tính năng **BROADCAST TO ALL**.
+* Thử tắt Terminal 2 (Tracker 8000) để kiểm chứng chat P2P vẫn hoạt động.
