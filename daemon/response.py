@@ -206,7 +206,7 @@ class Response():
             if isinstance(self.cookies, dict):
                 for k, v in self.cookies.items():
                     # Set-Cookie format with security flags
-                    header_lines.append('Set-Cookie: {}={}; Path=/; HttpOnly\r\n'.format(k, v))
+                    header_lines.append('Set-Cookie: {}={}; Path=/\r\n'.format(k, v))
         except Exception:
             pass
 

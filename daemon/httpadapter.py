@@ -19,11 +19,16 @@ http settings (headers, bodies). The adapter supports both
 raw URL paths and RESTful route definitions, and integrates with
 Request and Response objects to handle client-server communication.
 """
-
+import random
 from .request import Request
 from .response import Response
 from .dictionary import CaseInsensitiveDict
-
+USER_DB = {
+    "admin": "password",
+    "user1": "123456",
+    "teacher": "bk2025",
+    "alice": "alice123"
+}
 class HttpAdapter:
     """
     A mutable :class:`HTTP adapter <HTTP adapter>` for managing client connections
@@ -201,10 +206,12 @@ class HttpAdapter:
             r = Response()
             
             # Validate credentials
-            if username == 'admin' and password == 'password':
+            if username in USER_DB and USER_DB[username] == password:
+                
                 # ✅ Login success
                 r.status_code = 200
                 r.reason = 'OK'
+                rand_num = random.randint(10, 99)
                 
                 # Load index.html from www/
                 base_dir = r.prepare_content_type(mime_type='text/html')
@@ -212,7 +219,8 @@ class HttpAdapter:
                 r._content = content
                 
                 # Set auth cookie (session management)
-                r.cookies = {'auth': 'true'}
+                r.cookies = {'auth': rand_num}
+                #r.headers['Set-Cookie'] = 'auth=true; Path=/'
                 
                 # Allow CORS for tracker clients
                 r.headers['Access-Control-Allow-Origin'] = '*'
